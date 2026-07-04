@@ -1,3 +1,5 @@
+const DEFAULT_CLIENT_INFO = '株式会社ARK DIGITAL ENTERTAINMENT';
+
 document.addEventListener('DOMContentLoaded', function() {
     // 編集可能な要素の設定
     setupEditableElements();
@@ -24,18 +26,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 税込みモードの復元（loadDataFromURLより先に実行）
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('taxMode') && params.get('taxMode') === 'inclusive') {
-        const toggle = document.getElementById('taxInclusiveMode');
-        const label = document.getElementById('taxModeLabel');
-        if (toggle) {
-            toggle.checked = true;
-            label.textContent = '税込み額入力';
-        }
-    }
+    // taxMode未指定時は税込み額入力を初期値にする
+    setupTaxModeFromURL();
 
     // URLパラメータからデータを読み込む
     loadDataFromURL();
+
+    // URLパラメータに請求先がない場合は初期値を設定
+    setupDefaultClientInfo();
     
     // ボタンのイベントリスナーを設定
     document.getElementById('download-pdf').addEventListener('click', downloadPDF);
@@ -44,6 +42,34 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('generate-link').addEventListener('click', generateShareLink);
     document.getElementById('copy-link').addEventListener('click', copyShareLink);
 });
+
+// 税込みモードをURLパラメータから復元する関数
+function setupTaxModeFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const toggle = document.getElementById('taxInclusiveMode');
+    const label = document.getElementById('taxModeLabel');
+
+    if (!toggle) return;
+
+    const taxMode = params.get('taxMode');
+    const isTaxInclusive = taxMode !== 'exclusive';
+
+    toggle.checked = isTaxInclusive;
+    if (label) {
+        label.textContent = isTaxInclusive ? '税込み額入力' : '税抜き額入力';
+    }
+}
+
+// 請求先の初期値を設定する関数
+function setupDefaultClientInfo() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('clientInfo')) return;
+
+    const clientInfoElement = document.querySelector('.editable[data-param="clientInfo"]');
+    if (clientInfoElement && clientInfoElement.textContent.trim() === '') {
+        clientInfoElement.textContent = DEFAULT_CLIENT_INFO;
+    }
+}
 
 // 日付フィールドの初期化
 function setupDateFields() {
@@ -454,6 +480,20 @@ function resetForm() {
         
         // 日付フィールドを初期値に戻す
         setupDateFields();
+
+        // 税込みモードと請求先を初期値に戻す
+        const taxToggle = document.getElementById('taxInclusiveMode');
+        const taxLabel = document.getElementById('taxModeLabel');
+        if (taxToggle) {
+            taxToggle.checked = true;
+        }
+        if (taxLabel) {
+            taxLabel.textContent = '税込み額入力';
+        }
+        const clientInfoElement = document.querySelector('.editable[data-param="clientInfo"]');
+        if (clientInfoElement) {
+            clientInfoElement.textContent = DEFAULT_CLIENT_INFO;
+        }
         
         // URLパラメータをクリア
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -509,8 +549,8 @@ function updateURLParameters() {
     
     // 税込みモードのパラメータを保存
     const taxToggle = document.getElementById('taxInclusiveMode');
-    if (taxToggle && taxToggle.checked) {
-        params.set('taxMode', 'inclusive');
+    if (taxToggle) {
+        params.set('taxMode', taxToggle.checked ? 'inclusive' : 'exclusive');
     }
     
     // 日付入力フィールドのパラメータを取得
