@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "stremix": {
+      "source": {
+        "source": "github",
+        "repo": "stremix-jp/stremix-jp"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ark-design@stremix": true
+  }
+}
