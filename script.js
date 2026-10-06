@@ -261,6 +261,33 @@ function formatAmount(amount) {
     return amount.toLocaleString() + '円';
 }
 
+// 入力された十進数を整数比で保持し、二進浮動小数点の誤差を避ける。
+// parseFloat と同様に「8.20時間」などの先頭の数値を読む。
+function decimalRatio(text) {
+    const match = String(text).trim().match(/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i);
+    if (!match || !Number.isFinite(Number(match[0])) || Number(match[0]) === 0) {
+        return [0n, 1n];
+    }
+    const [mantissa, exponent = '0'] = match[0].toLowerCase().split('e');
+    const decimals = (mantissa.split('.')[1] || '').length;
+    const scale = decimals - Number(exponent);
+    const integer = BigInt(mantissa.replace('.', ''));
+    return scale >= 0
+        ? [integer, 10n ** BigInt(scale)]
+        : [integer * 10n ** BigInt(-scale), 1n];
+}
+
+function floorDecimalProduct(left, right, divisor = 1) {
+    const [leftValue, leftScale] = decimalRatio(left);
+    const [rightValue, rightScale] = decimalRatio(right);
+    const numerator = leftValue * rightValue;
+    const denominator = leftScale * rightScale * BigInt(divisor);
+    // BigInt の除算はゼロ方向なので、負の端数も Math.floor と揃える。
+    const rounded = numerator / denominator
+        - (numerator < 0n && numerator % denominator !== 0n ? 1n : 0n);
+    return Number(rounded);
+}
+
 // 明細の単価と数量から金額を計算する関数
 function calculateItemAmount(itemNumber) {
     const priceElement = document.querySelector(`[data-param="item${itemNumber}Price"]`);
@@ -277,14 +304,12 @@ function calculateItemAmount(itemNumber) {
             
             // 数量が数値の場合（例: 1, 2.5など）
             if (!isNaN(parseFloat(quantityText))) {
-                const quantity = parseFloat(quantityText);
-                const amount = Math.floor(price * quantity); // 小数点以下切り捨て
+                const amount = floorDecimalProduct(priceText.replace(/[,円]/g, ''), quantityText);
                 amountElement.textContent = amount.toLocaleString();
             } 
             // 数量が「〇人月」などの場合
             else if (quantityText.includes('人月') || quantityText.includes('人日')) {
-                const quantity = parseFloat(quantityText) || 1; // 数値部分を抽出、なければ1とする
-                const amount = Math.floor(price * quantity); // 小数点以下切り捨て
+                const amount = floorDecimalProduct(priceText.replace(/[,円]/g, ''), '1');
                 amountElement.textContent = amount.toLocaleString();
             }
             // その他の場合は単価をそのまま金額とする
@@ -308,7 +333,6 @@ function calculateTotals() {
         }
     }
     
-    const taxRate = 0.1;
     const taxToggle = document.getElementById('taxInclusiveMode');
     const isTaxInclusive = taxToggle && taxToggle.checked;
     
@@ -317,12 +341,12 @@ function calculateTotals() {
     if (isTaxInclusive) {
         // 税込みモード: 入力額が税込み → 税抜きと消費税を逆算
         total = itemTotal;
-        subtotal = Math.floor(total / (1 + taxRate)); // 税抜き額（切り捨て）
+        subtotal = floorDecimalProduct(total, 10, 11); // 税抜き額（切り捨て）
         taxAmount = total - subtotal; // 消費税
     } else {
         // 税抜きモード（従来）: 入力額が税抜き → 消費税を加算
         subtotal = itemTotal;
-        taxAmount = Math.floor(subtotal * taxRate); // 小数点以下切り捨て
+        taxAmount = floorDecimalProduct(subtotal, 1, 10); // 小数点以下切り捨て
         total = subtotal + taxAmount;
     }
     
